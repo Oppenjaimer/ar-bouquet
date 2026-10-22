@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <script src="aframe.min.js"></script>
     <script src="aframe-ar.js"></script>
     <title>Bouquet)))</title>
@@ -40,9 +41,64 @@
     <script>
         AFRAME.registerComponent("open-note", {
             init: function () {
-                this.el.addEventListener("click", function () {
-                    document.getElementById("note-2d").style.display = "flex";
-                });
+                const el = this.el;
+                const scene = el.sceneEl;
+                const corner = new THREE.Vector3();
+                const corners = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
+
+                function insideQuad(p, q) {
+                    let sign = 0;
+
+                    for (let i = 0; i < 4; i++) {
+                        const a = q[i], b = q[(i + 1) % 4];
+                        const cross = (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+
+                        if (cross !== 0) {
+                            const s = (cross > 0) ? 1 : -1;
+
+                            if (sign === 0) sign = s;
+                            else if (s !== sign) return false;
+                        }
+                    }
+
+                    return true;
+                }
+
+                function onPointer(e) {
+                    if (document.getElementById("note-2d").style.display === "flex") return;
+                    if (!el.object3D.visible || !el.parentEl.object3D.visible) return;
+
+                    const camera = scene.camera;
+                    const canvas = scene.canvas;
+                    if (!camera || !canvas) return;
+
+                    camera.updateMatrixWorld(true);
+                    el.object3D.updateWorldMatrix(true, false);
+
+                    const w = (el.getAttribute("width") || 1) / 2;
+                    const h = (el.getAttribute("height") || 1) / 2;
+                    const rect = canvas.getBoundingClientRect();
+                    const pts = [];
+
+                    for (const [cx, cy] of corners) {
+                        corner.set(cx * w, cy * h, 0);
+                        el.object3D.localToWorld(corner);
+                        corner.project(camera);
+
+                        if (corner.z > 1) return;
+
+                        pts.push({
+                            x: rect.left + (corner.x + 1) / 2 * rect.width,
+                            y: rect.top + (1 - corner.y) / 2 * rect.height
+                        });
+                    }
+
+                    if (insideQuad({ x: e.clientX, y: e.clientY }, pts)) {
+                        document.getElementById("note-2d").style.display = "flex";
+                    }
+                }
+
+                window.addEventListener("pointerdown", onPointer);
             }
         });
 
@@ -52,8 +108,8 @@
     </script>
 </head>
 
-<body style="margin: 0; overflow: hidden;">
-    <div id="note-2d">
+<body style="margin: 0; padding: 0; overflow: hidden; width: 100vw; height: 100vh;">
+    <div id="note-2d" onclick="if (event.target === this) closeNote()">
         <div class="paper">
             <span class="close-btn" onclick="closeNote()">×</span>
             <p style="font-size: 1.15em; line-height: 1.6; color: #2c3e50; margin-bottom: 25px;">
@@ -72,9 +128,8 @@
 
     <a-scene
         embedded
-        arjs="sourceType: webcam; debugUIEnabled: false;"
-        cursor="rayOrigin: mouse"
-        raycaster="objects: .clickable">
+        vr-mode-ui="enabled: false"
+        arjs="sourceType: webcam; debugUIEnabled: false;">
 
         <a-marker type="pattern" url="marker.patt">
             <a-entity
@@ -86,14 +141,14 @@
             </a-entity>
 
             <a-plane
-                class="clickable"
                 open-note
                 position="2 0.5 0"
                 rotation="-90 0 0"
                 width="1.5"
                 height="1"
                 color="#ffcccc"
-                text="value: TOCA AQUI; color: #c0392b; align: center; width: 5; font: mozillavr;">
+                material="side: double"
+                text="value: TOCA AQUI; color: #c0392b; align: center; width: 5; font: mozillavr; zOffset: 0.05;">
             </a-plane>
         </a-marker>
 
